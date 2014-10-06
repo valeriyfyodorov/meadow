@@ -2,7 +2,7 @@
   "name": "meadow",
   "version": "1.0.0",
   "description": "Test website",
-  "main": "index.js",
+  "main": "meadowlark.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -22,6 +22,8 @@
   },
   "homepage": "https://github.com/valeriyfyodorov/meadow",
   "dependencies": {
-    "express": "^4.9.5"
+    "express": "^4.9.5",
+    "express-handlebars": "^1.1.0",
+    
   }
 }
