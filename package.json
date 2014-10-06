@@ -1,0 +1,27 @@
+{
+  "name": "meadow",
+  "version": "1.0.0",
+  "description": "Test website",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/valeriyfyodorov/meadow.git"
+  },
+  "keywords": [
+    "Node",
+    "js",
+    "test"
+  ],
+  "author": "Valeriy Fyodorov",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/valeriyfyodorov/meadow/issues"
+  },
+  "homepage": "https://github.com/valeriyfyodorov/meadow",
+  "dependencies": {
+    "express": "^4.9.5"
+  }
+}
