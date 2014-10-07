@@ -11,6 +11,7 @@ node_modules
 # Ignore all logfiles and tempfiles.
 /log/*.log
 /tmp
+*.log
 
 # Ignore other unneeded files.
 *.swp
