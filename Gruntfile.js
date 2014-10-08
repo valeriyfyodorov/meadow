@@ -7,6 +7,11 @@ module.exports = function(grunt){
 ].forEach(function(task){
 	grunt.loadNpmTasks(task);
 });
+
+//checking options
+//run grunt --port=3001 for a different port
+var port = grunt.option('port') || '3000';
+
 // configure plugins
 grunt.initConfig({
 	cafemocha: {
@@ -19,7 +24,7 @@ grunt.initConfig({
 	},
 	exec: {
 		linkchecker:
-		{ cmd: 'linkchecker http://localhost:3000' }
+		{ cmd: 'linkchecker http://localhost:' + port }
 	},
 });
 // register tasks
