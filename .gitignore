@@ -12,6 +12,7 @@ node_modules
 /log/*.log
 /tmp
 *.log
+credentials.js
 
 # Ignore other unneeded files.
 *.swp
