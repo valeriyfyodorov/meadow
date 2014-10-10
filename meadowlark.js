@@ -9,8 +9,33 @@ var credentials = require('./credentials.js');
 //hide server information
 app.disable('x-powered-by');
 
+//database connection
+require('./lib/mongo_connect.js').createConnection(app, credentials);
+//fill in dummy database data
+//require('./dummy/fill_vacations.js')();
+var Vacation = require('./models/vacation.js');
 
-////////start server here
+
+//Mongo session
+var MongoSessionStore = require('session-mongoose')(require('connect'));
+var sessionStore = new MongoSessionStore({ url:
+credentials.mongo.development.connectionString });
+//cookie parser npm install --save cookie-parser
+app.use(require('cookie-parser')(credentials.cookieSecret));
+//using express-session npm install --save express-session
+app.use(require('express-session')({
+    secret: credentials.cookieSecret,
+    name: "mead_session",
+    //store: sessionStore, // connect-mongo session store
+    //proxy: true,
+    resave: true,
+    saveUninitialized: true,
+    store: sessionStore //use Mongoose for session
+}));
+
+
+
+////////////////////start server here
 
 function startServer() {
 	app.listen(app.get('port'), function(){
@@ -19,9 +44,7 @@ function startServer() {
 			'; press Ctrl-C to terminate.' );
 	});
 }
-
 //switch to cluster 
-
 if(require.main === module){
 	// application run directly; start app server
 	startServer();
@@ -29,25 +52,18 @@ if(require.main === module){
 	// application imported as a module via "require": export function
 	// to create server
 	module.exports = startServer;
+	//adding cluster middle-ware for multi-cluster
+	app.use(function(req,res,next){
+		var cluster = require('cluster');
+		if(cluster.isWorker) console.log('Worker %d received request',
+			cluster.worker.id);
+			next();
+	});
 }
+//////////////////////////////////////
 
 
-//////////////////
 
-
-//cookie parser npm install --save cookie-parser
-app.use(require('cookie-parser')(credentials.cookieSecret));
-//using express-session npm install --save express-session
-//app.use(require('express-session')());
-
-app.use(require('express-session')({
-    secret: credentials.cookieSecret,
-    name: "mead_session",
-    //store: sessionStore, // connect-mongo session store
-    //proxy: true,
-    resave: true,
-    saveUninitialized: true
-}));
 
 //setting handlebars
 var handlebars = require('express-handlebars');
@@ -72,20 +88,20 @@ var formidable = require('formidable');
 
 
 
-//enable logging
+// //enable logging
 
-switch(app.get('env')){
-	case 'development':
-		// compact, colorful dev logging
-		app.use(require('morgan')('dev'));
-		break;
-	case 'production':
-		// module 'express-logger' supports daily log rotation
-		app.use(require('express-logger')({
-			path: __dirname + '/log/requests.log'
-		}));
-		break;
-}
+// switch(app.get('env')){
+// 	case 'development':
+// 		// compact, colorful dev logging
+// 		app.use(require('morgan')('dev'));
+// 		break;
+// 	case 'production':
+// 		// module 'express-logger' supports daily log rotation
+// 		app.use(require('express-logger')({
+// 			path: __dirname + '/log/requests.log'
+// 		}));
+// 		break;
+// }
 
 
 
@@ -107,31 +123,31 @@ switch(app.get('env')){
 
 
 
-// //use jqupload middleware
-// var jqupload = require('jquery-file-upload-middleware');
+//use jqupload middleware
+var jqupload = require('jquery-file-upload-middleware');
 
-// jqupload.configure({
-// 		imageVersions: {
-//             thumbnail: {
-//                 width: 80,
-//                 height: 80
-//             }
-//         }
-//     });
+jqupload.configure({
+		imageVersions: {
+            thumbnail: {
+                width: 80,
+                height: 80
+            }
+        }
+    });
 
-// app.use('/upload', function (req, res, next) {
-//             // imageVersions are taken from upload.configure()
-//             var now = Date.now() + (crypto.randomBytes(20).toString('hex'));
-//             //console.log(now);
-//             jqupload.fileHandler({
-//                 uploadDir: function () {
-//                     return __dirname + '/public/uploads/' + now;
-//                 },
-//                 uploadUrl: function () {
-//                     return '/uploads/' + req.sessionID;
-//                 }
-//             })(req, res, next);
-//         });
+app.use('/upload', function (req, res, next) {
+            // imageVersions are taken from upload.configure()
+            var now = Date.now() + (crypto.randomBytes(20).toString('hex'));
+            //console.log(now);
+            jqupload.fileHandler({
+                uploadDir: function () {
+                    return __dirname + '/public/uploads/' + now;
+                },
+                uploadUrl: function () {
+                    return '/uploads/' + req.sessionID;
+                }
+            })(req, res, next);
+        });
 
 
 
@@ -200,13 +216,105 @@ app.use(function(req, res, next){
 
 //routing
 
-	// //adding
-	// app.use(function(req,res,next){
-	// 	console.log('using cluster')
-	// 	var cluster = require('cluster');
-	// 	if(cluster.isWorker) console.log('Worker %d received request',
-	// 		cluster.worker.id);
-	// });
+	//define global session variable
+	var sessionVar = {};
+	//helper function for session to make sure it is saved
+	var checkEqualLongRequest = function (item1, item2){
+		//make sure it is saved
+		var areEqual = (item1 == item2);
+		var sessionTimeOut = setTimeout(function () {
+			areEqual = true;
+		}, 5000);
+
+		//trying to get session updated
+		while (!areEqual) {
+			if (item1 == item2){
+				clearTimeout(sessionTimeOut);
+				break;
+			}
+		}
+		return true;
+	};
+
+
+
+	app.get('/set-currency/:currency', function(req,res){
+
+		sessionVar.currency = req.params.currency;
+		req.session.currency = sessionVar.currency;
+		
+		res.redirect(303, '/vacations');
+		//console.log('set - ' + req.session.currency);
+	});
+	function convertFromUSD(value, currency){
+		switch(currency){
+			case 'USD': return value * 1;
+			case 'GBP': return value * 0.6;
+			case 'BTC': return value * 0.0023707918444761;
+			default: return NaN;
+		}
+	}
+	app.get('/vacations', function(req, res){
+		Vacation.find({ available: true }, function(err, vacations){
+			var currency = req.session.currency || 'USD';
+			//double load
+			if (sessionVar.currency && (sessionVar.currency != currency)) {
+				currency = sessionVar.currency || 'USD';
+			}
+			var context = {
+				currency: currency,
+				vacations: vacations.map(function(vacation){
+					return {
+						sku: vacation.sku,
+						name: vacation.name,
+						description: vacation.description,
+						inSeason: vacation.inSeason,
+						price: convertFromUSD(vacation.priceInCents/100, currency),
+						qty: vacation.qty,
+					};
+				})
+			};
+			switch(currency){
+				case 'USD': context.currencyUSD = 'selected'; break;
+				case 'GBP': context.currencyGBP = 'selected'; break;
+				case 'BTC': context.currencyBTC = 'selected'; break;
+			}
+			res.render('vacations', context);
+			//console.log('get - ' + currency);
+		});
+	});
+
+
+	var VacationInSeasonListener = require('./models/vacationInSeasonListener.js');
+	app.get('/notify-me-when-in-season', function(req, res){
+		res.render('notify-me-when-in-season', { sku: req.query.sku });
+	});
+	app.post('/notify-me-when-in-season', function(req, res){
+		VacationInSeasonListener.update(
+			{ email: req.body.email },
+			{ $push: { skus: req.body.sku } },
+			{ upsert: true },
+			function(err){
+				if(err) {
+					console.error(err.stack);
+					req.session.flash = {
+						type: 'danger',
+						intro: 'Ooops!',
+						message: 'There was an error processing your request.',
+					};
+					return res.redirect(303, '/vacations');
+				}
+				req.session.flash = {
+					type: 'success',
+					intro: 'Thank you!',
+					message: 'You will be notified when this vacation is in season.',
+				};
+				return res.redirect(303, '/vacations');
+			}
+			);
+	});
+
+
 
 
 	// app.post('/cart/checkout', function(req, res){
@@ -261,19 +369,9 @@ app.use(function(req, res, next){
 		});
 	});
 
-	app.get('/', function(req, res){
-	//res.type('text/plain');
-	console.log('root folder requested');
-	res.render("home");
-	});
 
-	app.get('/about', function(req, res){
-		//res.type('text/plain');
-		res.render('about', { 
-			fortune: fortune.getFortune(),
-			pageTestScript: '/qa/tests-about.js'
-		 });
-	});
+	//loading external route file
+	require('./routes.js')(app);
 
 	//test of both normal and jquery methods for nurse-rhyme page
 
@@ -378,6 +476,23 @@ app.use(function(req, res, next){
 		for(var name in req.headers) s += name + ': ' + req.headers[name] + '\n';
 			res.send(s);
 	});
+
+//auto routes
+var autoViews = {};
+var fs = require('fs');
+app.use(function(req,res,next){
+	var path = req.path.toLowerCase();
+	// check cache; if it's there, render the view
+	if(autoViews[path]) return res.render(autoViews[path]);
+	// if it's not in the cache, see if there's
+	// a .handlebars file that matches
+	if(fs.existsSync(__dirname + '/views' + path + '.hbs')){
+		autoViews[path] = path.replace(/^\//, '');
+		return res.render(autoViews[path]);
+	}
+	// no view found; pass on to 404 handler
+	next();
+});
 
 // custom 404 page
 app.use(function(req, res, next){

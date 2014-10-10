@@ -25,9 +25,9 @@
 		<header><img src="/img/logo.png" alt="Meadowlark Travel Logo"></header>
 
 		{{#if flash}}
-			<div class="alert alert-dismissible alert-{{flash.type}}">
+			<div class="alert alert-dismissible alert-{{flash.type}} fade in role="alert">
 			<button type="button" class="close"
-			data-dismiss="alert" aria-hidden="true">&times;<button>
+			data-dismiss="alert"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
 			<strong>{{flash.intro}}</strong> {{{flash.message}}}
 			</div>
 		{{/if}}
